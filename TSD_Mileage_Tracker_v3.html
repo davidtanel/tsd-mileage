@@ -1,0 +1,2112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>TSD Mileage Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --ink: #0f1923;
+  --ink2: #1e2d3d;
+  --paper: #f4f1ec;
+  --card: #ffffff;
+  --accent: #b5341a;
+  --accent2: #e8491d;
+  --green: #1a6b3c;
+  --gold: #c9962a;
+  --mid: #7a8494;
+  --light: #e8e4dc;
+  --border: #ddd9d0;
+  --warn: #c9962a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  font-size: 15px;
+}
+
+/* ── NAV ── */
+.nav {
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  border-bottom: 2px solid var(--accent);
+}
+
+.nav-brand {
+  font-family: 'Playfair Display', serif;
+  color: white;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+
+.nav-brand span { color: var(--accent2); }
+
+.nav-tabs {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+  align-items: center;
+}
+
+.nav-tab {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.nav-tab:hover { color: white; background: rgba(255,255,255,0.08); }
+.nav-tab.active { color: white; background: var(--accent); }
+
+.sync-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.4);
+}
+
+.sync-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--mid);
+  transition: background 0.3s;
+}
+.sync-dot.synced { background: #4caf7d; }
+.sync-dot.syncing { background: var(--gold); animation: pulse 1s infinite; }
+.sync-dot.error { background: var(--accent2); }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── KM BAR ── */
+.km-bar {
+  background: var(--ink2);
+  padding: 14px 20px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+}
+
+.km-stat {
+  padding: 8px 12px;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.km-stat:last-child { border-right: none; }
+
+.km-stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 4px;
+}
+
+.km-stat-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.35rem;
+  color: white;
+  line-height: 1;
+}
+
+.km-stat-value.accent { color: var(--accent2); }
+.km-stat-value.green { color: #4caf7d; }
+.km-stat-value.warn { color: var(--gold); }
+
+.threshold-bar-wrap {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding: 0 12px;
+}
+
+.threshold-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 5px;
+}
+
+.threshold-track {
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.threshold-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf7d, var(--gold));
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* ── PAGES ── */
+.page { display: none; }
+.page.active { display: block; }
+
+.container { max-width: 700px; margin: 0 auto; padding: 20px 16px 100px; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.card-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.05rem;
+  margin-bottom: 16px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title .icon {
+  width: 28px; height: 28px;
+  background: var(--ink);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+
+/* ── FORMS ── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-group.third { grid-column: span 1; }
+
+label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mid);
+}
+
+input, select, textarea {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.93rem;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fafaf8;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  -webkit-appearance: none;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--ink2);
+  box-shadow: 0 0 0 3px rgba(15,25,35,0.07);
+  background: white;
+}
+
+textarea { resize: vertical; min-height: 58px; }
+
+/* Autocomplete */
+.autocomplete-wrap { position: relative; }
+
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: white;
+  border: 1.5px solid var(--ink2);
+  border-radius: 7px;
+  z-index: 100;
+  max-height: 180px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: none;
+}
+
+.autocomplete-list.open { display: block; }
+
+.autocomplete-item {
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--light);
+  transition: background 0.1s;
+}
+
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:hover, .autocomplete-item.selected { background: var(--paper); }
+.autocomplete-item .match { font-weight: 600; color: var(--ink); }
+.autocomplete-item .similar-tag {
+  font-size: 0.7rem;
+  color: var(--warn);
+  margin-left: 6px;
+  font-weight: 500;
+}
+
+/* Vehicle toggle */
+.vehicle-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.vehicle-btn {
+  background: #fafaf8;
+  border: none;
+  padding: 10px 8px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--mid);
+  text-align: center;
+  border-right: 1px solid var(--border);
+  line-height: 1.3;
+}
+
+.vehicle-btn:last-child { border-right: none; }
+.vehicle-btn.active { background: var(--ink); color: white; }
+.vehicle-btn .veh-label { font-size: 0.7rem; opacity: 0.7; display: block; }
+
+/* Buttons */
+.btn-primary {
+  width: 100%;
+  background: var(--ink);
+  color: white;
+  border: none;
+  border-radius: 7px;
+  padding: 13px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.93rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: background 0.15s, transform 0.1s;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary:hover { background: var(--ink2); }
+.btn-primary:active { transform: scale(0.985); }
+
+.btn-row { display: grid; gap: 8px; margin-top: 4px; }
+.btn-row.cols2 { grid-template-columns: 1fr 1fr; }
+.btn-row.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.btn-outline {
+  border: 1.5px solid var(--border);
+  background: white;
+  color: var(--ink);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.btn-outline:hover { border-color: var(--ink); background: var(--ink); color: white; }
+.btn-outline.green { border-color: var(--green); color: var(--green); }
+.btn-outline.green:hover { background: var(--green); color: white; }
+.btn-outline.accent { border-color: var(--accent); color: var(--accent); }
+.btn-outline.accent:hover { background: var(--accent); color: white; }
+
+/* ── TRIP LIST ── */
+.trip-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.filter-chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: white;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--mid);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.filter-chip:hover { border-color: var(--ink); color: var(--ink); }
+.filter-chip.active { background: var(--ink); color: white; border-color: var(--ink); }
+
+.trip-item {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 13px 15px;
+  margin-bottom: 9px;
+  background: var(--card);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  transition: box-shadow 0.15s;
+}
+
+.trip-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+.trip-vehicle-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.trip-vehicle-dot.primary { background: var(--ink); }
+.trip-vehicle-dot.secondary { background: var(--gold); }
+
+.trip-dest { font-weight: 600; font-size: 0.92rem; }
+.trip-meta { font-size: 0.78rem; color: var(--mid); margin-top: 2px; }
+.trip-client { font-size: 0.75rem; color: var(--green); font-weight: 500; margin-top: 2px; }
+
+.trip-right { text-align: right; flex-shrink: 0; }
+.trip-km {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.1rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+.trip-reimb { font-size: 0.72rem; color: var(--green); font-weight: 600; margin-top: 1px; }
+.trip-date-small { font-size: 0.7rem; color: var(--mid); margin-top: 3px; }
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: var(--border);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 3px 5px;
+  border-radius: 4px;
+  transition: color 0.15s;
+  display: block;
+  margin-top: 4px;
+  margin-left: auto;
+}
+.delete-btn:hover { color: var(--accent); }
+
+.empty-state {
+  text-align: center;
+  padding: 36px 20px;
+  color: var(--mid);
+  font-size: 0.88rem;
+  border: 1.5px dashed var(--border);
+  border-radius: 9px;
+  line-height: 1.6;
+}
+
+/* ── EXPORT PAGE ── */
+.export-section { margin-bottom: 20px; }
+.export-section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--mid);
+  font-weight: 600;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.filter-row.three { grid-template-columns: 1fr 1fr 1fr; }
+
+.note {
+  font-size: 0.75rem;
+  color: var(--mid);
+  padding: 10px 12px;
+  background: var(--paper);
+  border-radius: 6px;
+  border-left: 3px solid var(--border);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+.note.warn { border-left-color: var(--warn); }
+.note.green { border-left-color: var(--green); }
+
+/* ── SETTINGS PAGE ── */
+.settings-section { margin-bottom: 6px; }
+
+.vehicle-card {
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.vehicle-card.primary-veh { border-color: var(--ink); }
+.vehicle-card.secondary-veh { border-color: var(--gold); }
+
+.vehicle-card-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+.vehicle-card.primary-veh .vehicle-card-label { color: var(--ink); }
+.vehicle-card.secondary-veh .vehicle-card-label { color: var(--gold); }
+
+.veh-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+/* Client manager */
+.client-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin-bottom: 7px;
+  background: white;
+}
+
+.client-name-display { font-size: 0.9rem; font-weight: 500; }
+.client-trip-count { font-size: 0.72rem; color: var(--mid); }
+
+.client-actions { display: flex; gap: 6px; }
+
+.btn-tiny {
+  font-size: 0.7rem;
+  padding: 4px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: white;
+  cursor: pointer;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 500;
+  color: var(--mid);
+  transition: all 0.15s;
+}
+
+.btn-tiny:hover { border-color: var(--ink); color: var(--ink); }
+.btn-tiny.danger:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Sync setup */
+.sync-setup-box {
+  border: 1.5px dashed var(--border);
+  border-radius: 9px;
+  padding: 20px;
+  text-align: center;
+}
+
+.sync-setup-box.connected {
+  border-style: solid;
+  border-color: var(--green);
+  background: rgba(26,107,60,0.03);
+}
+
+.sync-step {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.sync-step-num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.sync-step-text { font-size: 0.85rem; line-height: 1.5; color: var(--ink2); }
+.sync-step-text a { color: var(--accent); }
+.sync-step-text code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  background: var(--paper);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,25,35,0.6);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+
+.modal-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.modal-body { font-size: 0.88rem; color: var(--mid); line-height: 1.6; margin-bottom: 20px; }
+.modal-body strong { color: var(--ink); }
+
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--ink);
+  color: white;
+  padding: 11px 22px;
+  border-radius: 24px;
+  font-size: 0.83rem;
+  font-weight: 500;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  z-index: 999;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.success { background: var(--green); }
+.toast.warn { background: var(--warn); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 500px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .form-group.full { grid-column: 1; }
+  .km-bar { grid-template-columns: 1fr 1fr; }
+  .km-stat:nth-child(2) { border-right: none; }
+  .nav-tab { font-size: 0.68rem; padding: 5px 8px; }
+  .veh-grid { grid-template-columns: 1fr 1fr; }
+  .filter-row { grid-template-columns: 1fr; }
+  .filter-row.three { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">TSD<span>·</span>Miles</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('log')">Log</button>
+    <button class="nav-tab" onclick="showPage('trips')">Trips</button>
+    <button class="nav-tab" onclick="showPage('export')">Export</button>
+    <button class="nav-tab" onclick="showPage('settings')">Settings</button>
+  </div>
+  <div class="sync-indicator">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncLabel">local</span>
+  </div>
+</nav>
+
+<!-- KM BAR -->
+<div class="km-bar">
+  <div class="km-stat">
+    <div class="km-stat-label">YTD KMs</div>
+    <div class="km-stat-value accent" id="statYtdKm">0</div>
+  </div>
+  <div class="km-stat">
+    <div class="km-stat-label">This Month</div>
+    <div class="km-stat-value" id="statMonthKm">0</div>
+  </div>
+  <div class="km-stat">
+    <div class="km-stat-label">YTD Reimb.</div>
+    <div class="km-stat-value green" id="statYtdReimb">$0</div>
+  </div>
+  <div class="km-stat">
+    <div class="km-stat-label">Trips YTD</div>
+    <div class="km-stat-value" id="statTrips">0</div>
+  </div>
+  <div class="threshold-bar-wrap">
+    <div class="threshold-label">
+      <span>CRA Threshold Progress</span>
+      <span id="thresholdLabel">0 / 5,000 km</span>
+    </div>
+    <div class="threshold-track">
+      <div class="threshold-fill" id="thresholdFill" style="width:0%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAGE: LOG ══ -->
+<div class="page active" id="page-log">
+<div class="container">
+  <div class="card">
+    <div class="card-title"><div class="icon">🚗</div> Log a Trip</div>
+
+    <!-- Vehicle Toggle -->
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Vehicle</label>
+      <div class="vehicle-toggle" id="vehicleToggle">
+        <button class="vehicle-btn active" id="vehBtn0" onclick="selectVehicle(0)">
+          <span id="vehToggleLabel0">My Vehicle</span>
+          <span class="veh-label" id="vehToggleSub0">Primary</span>
+        </button>
+        <button class="vehicle-btn" id="vehBtn1" onclick="selectVehicle(1)">
+          <span id="vehToggleLabel1">Spouse's Vehicle</span>
+          <span class="veh-label" id="vehToggleSub1">Secondary</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="tripDate">
+      </div>
+      <div class="form-group">
+        <label>Kilometres</label>
+        <input type="number" id="tripKm" placeholder="e.g. 42" min="0" step="0.1">
+      </div>
+
+      <div class="form-group full">
+        <label>Destination / Location</label>
+        <input type="text" id="tripDest" placeholder="e.g. Ottawa – NRCan Offices">
+      </div>
+
+      <div class="form-group full">
+        <label>Province</label>
+        <select id="tripProvince">
+          <option value="ON">Ontario</option>
+          <option value="AB">Alberta</option>
+          <option value="BC">British Columbia</option>
+          <option value="MB">Manitoba</option>
+          <option value="NB">New Brunswick</option>
+          <option value="NL">Newfoundland & Labrador</option>
+          <option value="NS">Nova Scotia</option>
+          <option value="PE">PEI</option>
+          <option value="QC">Quebec</option>
+          <option value="SK">Saskatchewan</option>
+          <option value="NT">Northwest Territories</option>
+          <option value="NU">Nunavut</option>
+          <option value="YT">Yukon</option>
+        </select>
+      </div>
+
+      <div class="form-group full autocomplete-wrap">
+        <label>Client</label>
+        <input type="text" id="tripClient" placeholder="Start typing client name…" autocomplete="off"
+          oninput="clientAutocomplete(this.value)" onblur="hideAutocompleteDelayed()">
+        <div class="autocomplete-list" id="clientDropdown"></div>
+      </div>
+
+      <div class="form-group full">
+        <label>Business Purpose</label>
+        <textarea id="tripPurpose" placeholder="e.g. MMR strategy briefing — site visit prep"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Trip Type</label>
+        <select id="tripRound">
+          <option value="no">One way</option>
+          <option value="yes">Round trip (×2)</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="addTrip()">＋ Add Trip</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ PAGE: TRIPS ══ -->
+<div class="page" id="page-trips">
+<div class="container">
+  <div class="card">
+    <div class="card-title"><div class="icon">📋</div> Trip Log</div>
+
+    <div class="trip-filters" id="tripFilters">
+      <button class="filter-chip active" onclick="setFilter('all',this)">All</button>
+    </div>
+
+    <div id="tripLog">
+      <div class="empty-state">No trips logged yet.<br>Head to the Log tab to add your first trip.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ PAGE: EXPORT ══ -->
+<div class="page" id="page-export">
+<div class="container">
+  <div class="card">
+    <div class="card-title"><div class="icon">📤</div> Export Mileage Log</div>
+
+    <div class="export-section">
+      <div class="export-section-title">Filter by Period</div>
+      <div class="filter-row">
+        <div class="form-group">
+          <label>Quick Select</label>
+          <select id="exportQuick" onchange="applyQuickFilter()">
+            <option value="">— choose —</option>
+            <option value="thismonth">This Month</option>
+            <option value="lastmonth">Last Month</option>
+            <option value="q1">Q1 (Jan–Mar)</option>
+            <option value="q2">Q2 (Apr–Jun)</option>
+            <option value="q3">Q3 (Jul–Sep)</option>
+            <option value="q4">Q4 (Oct–Dec)</option>
+            <option value="ytd">Year to Date</option>
+            <option value="fullyear">Full Year 2026</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Or: Start Date</label>
+          <input type="date" id="exportStart">
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="form-group">
+          <label>End Date</label>
+          <input type="date" id="exportEnd">
+        </div>
+        <div class="form-group">
+          <label>Client (optional)</label>
+          <select id="exportClient">
+            <option value="">All Clients</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="form-group">
+          <label>Vehicle (optional)</label>
+          <select id="exportVehicle">
+            <option value="">Both Vehicles</option>
+            <option value="0">Primary Vehicle</option>
+            <option value="1">Secondary Vehicle</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="export-section">
+      <div class="export-section-title">Preview</div>
+      <div id="exportPreview" style="font-size:0.83rem;color:var(--mid);padding:10px 0">
+        Select a period above to preview.
+      </div>
+    </div>
+
+    <div class="btn-row cols2">
+      <button class="btn-outline green" onclick="doExport('xlsx')">⬇ Download Excel</button>
+      <button class="btn-outline accent" onclick="doExport('pdf')">⬇ Download PDF</button>
+    </div>
+
+    <div class="note green" style="margin-top:12px">
+      Excel is best for your accountant. PDF is best for your TSD submission records.
+    </div>
+    <div class="note warn">
+      CRA 2026 rates: $0.72/km (first 5,000 km) · $0.62/km thereafter. Confirm with your accountant before submitting.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ PAGE: SETTINGS ══ -->
+<div class="page" id="page-settings">
+<div class="container">
+
+  <!-- Vehicles -->
+  <div class="card">
+    <div class="card-title"><div class="icon">🚘</div> Vehicles</div>
+
+    <div class="vehicle-card primary-veh">
+      <div class="vehicle-card-label">● Primary Vehicle (Yours)</div>
+      <div class="veh-grid">
+        <div class="form-group">
+          <label>Year</label>
+          <input type="text" id="v0year" placeholder="2023" maxlength="4" oninput="saveSettings()">
+        </div>
+        <div class="form-group">
+          <label>Make</label>
+          <input type="text" id="v0make" placeholder="Toyota" oninput="saveSettings()">
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <input type="text" id="v0model" placeholder="RAV4" oninput="saveSettings()">
+        </div>
+        <div class="form-group">
+          <label>Plate</label>
+          <input type="text" id="v0plate" placeholder="ABCD 123" oninput="saveSettings()">
+        </div>
+        <div class="form-group" style="grid-column:span 2">
+          <label>Opening Odometer (km)</label>
+          <input type="number" id="v0odo" placeholder="45000" oninput="saveSettings()">
+        </div>
+      </div>
+    </div>
+
+    <div class="vehicle-card secondary-veh">
+      <div class="vehicle-card-label">◆ Secondary Vehicle (Spouse's)</div>
+      <div class="veh-grid">
+        <div class="form-group">
+          <label>Year</label>
+          <input type="text" id="v1year" placeholder="2021" maxlength="4" oninput="saveSettings()">
+        </div>
+        <div class="form-group">
+          <label>Make</label>
+          <input type="text" id="v1make" placeholder="Honda" oninput="saveSettings()">
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <input type="text" id="v1model" placeholder="CR-V" oninput="saveSettings()">
+        </div>
+        <div class="form-group">
+          <label>Plate</label>
+          <input type="text" id="v1plate" placeholder="WXYZ 456" oninput="saveSettings()">
+        </div>
+        <div class="form-group" style="grid-column:span 2">
+          <label>Opening Odometer (km)</label>
+          <input type="number" id="v1odo" placeholder="32000" oninput="saveSettings()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tax Year -->
+  <div class="card">
+    <div class="card-title"><div class="icon">📅</div> Tax Year</div>
+    <p style="font-size:0.82rem;color:var(--mid);margin-bottom:14px">Set your corporate tax year start date and opening odometer. Used to calculate YTD totals on reimbursement invoices and to verify your business-use percentage at year-end.</p>
+    <div class="veh-grid" style="grid-template-columns:1fr 1fr">
+      <div class="form-group">
+        <label>Tax Year Start (Day 1)</label>
+        <input type="date" id="taxYearStart" oninput="saveSettings()">
+      </div>
+      <div class="form-group">
+        <label>Opening Odometer on Day 1 (km)</label>
+        <input type="number" id="openingOdo" placeholder="e.g. 47500" oninput="saveSettings()">
+      </div>
+    </div>
+    <p style="font-size:0.78rem;color:var(--mid);margin-top:8px">● TSD Advisory Inc. tax year: April 1 → March 31 &nbsp;·&nbsp; Set Day 1 to April 1, 2026 when your year begins.</p>
+  </div>
+
+  <!-- Client Manager -->
+  <div class="card">
+    <div class="card-title"><div class="icon">👤</div> Client Manager</div>
+    <div id="clientList">
+      <div class="empty-state">No clients yet. They'll appear here automatically as you log trips.</div>
+    </div>
+  </div>
+
+  <!-- Google Sheets Sync -->
+  <div class="card">
+    <div class="card-title"><div class="icon">☁️</div> Google Sheets Sync</div>
+    <div id="syncSetupArea">
+      <div class="sync-setup-box" id="syncBox">
+        <p style="font-size:0.85rem;color:var(--mid);margin-bottom:16px;line-height:1.6">
+          Connect to Google Sheets to sync your trips across all devices automatically.
+        </p>
+
+        <div class="sync-step">
+          <div class="sync-step-num">1</div>
+          <div class="sync-step-text">
+            Go to <a href="https://script.google.com" target="_blank">script.google.com</a> → New Project → paste the Apps Script below → click Deploy → Web App → Execute as Me → Anyone → Deploy. Copy the URL you receive.
+          </div>
+        </div>
+
+        <div class="sync-step">
+          <div class="sync-step-num">2</div>
+          <div class="sync-step-text">
+            Paste your deployment URL below and click Connect.
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <input type="text" id="syncUrlInput" placeholder="https://script.google.com/macros/s/…/exec" style="flex:1;font-size:0.8rem">
+          <button class="btn-outline" style="white-space:nowrap;padding:10px 14px" onclick="connectSync()">Connect</button>
+        </div>
+
+        <details style="margin-top:16px;text-align:left">
+          <summary style="font-size:0.78rem;color:var(--mid);cursor:pointer;user-select:none">▶ Show Apps Script to paste</summary>
+          <pre id="appsScriptCode" style="margin-top:10px;background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:0.7rem;font-family:'IBM Plex Mono',monospace;overflow-x:auto;white-space:pre;line-height:1.5;text-align:left;color:var(--ink2)"></pre>
+          <button class="btn-outline" style="margin-top:8px;font-size:0.75rem" onclick="copyScript()">Copy Script</button>
+        </details>
+      </div>
+
+      <div id="syncConnectedArea" style="display:none">
+        <div class="sync-setup-box connected">
+          <div style="font-size:1.5rem;margin-bottom:6px">✅</div>
+          <div style="font-weight:600;margin-bottom:4px">Connected to Google Sheets</div>
+          <div style="font-size:0.8rem;color:var(--mid);margin-bottom:14px" id="syncSheetName">Syncing to your Drive</div>
+          <button class="btn-outline" style="font-size:0.78rem" onclick="disconnectSync()">Disconnect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Danger Zone -->
+  <div class="card">
+    <div class="card-title"><div class="icon">⚠️</div> Data</div>
+    <div class="btn-row cols2">
+      <button class="btn-outline" onclick="exportBackup()">⬇ Backup All Data</button>
+      <button class="btn-outline accent" onclick="confirmClear()">🗑 Clear Year & Start Fresh</button>
+    </div>
+    <div class="note warn" style="margin-top:10px">Clearing is permanent. Always export a backup first.</div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══ MODALS ══ -->
+
+<!-- Duplicate client modal -->
+<div class="modal-overlay" id="dupModal">
+  <div class="modal">
+    <div class="modal-title">Similar client found</div>
+    <div class="modal-body" id="dupModalBody">A similar client name already exists.</div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeDupModal(false)">Keep as typed</button>
+      <button class="btn-primary" id="dupUseExistingBtn" onclick="closeDupModal(true)" style="width:auto;padding:10px 18px">Use existing</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename client modal -->
+<div class="modal-overlay" id="renameModal">
+  <div class="modal">
+    <div class="modal-title">Rename Client</div>
+    <div class="modal-body">This will update the client name on all existing trips.</div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>New Name</label>
+      <input type="text" id="renameInput">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeRenameModal(false)">Cancel</button>
+      <button class="btn-primary" onclick="closeRenameModal(true)" style="width:auto;padding:10px 18px">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear confirm modal -->
+<div class="modal-overlay" id="clearModal">
+  <div class="modal">
+    <div class="modal-title">Clear all data?</div>
+    <div class="modal-body">This will permanently delete all trips for the current year. <strong>Export a backup first.</strong></div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="document.getElementById('clearModal').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" onclick="doClear()" style="width:auto;padding:10px 18px;background:var(--accent)">Yes, clear everything</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+const CRA_RATE_1 = 0.72;
+const CRA_RATE_2 = 0.62;
+const CRA_THRESHOLD = 5000;
+const TAX_YEAR = 2026;
+
+let trips = [];
+let clients = [];
+let settings = {
+  vehicles: [
+    { year:'', make:'', model:'', plate:'', odo:'' },
+    { year:'', make:'', model:'', plate:'', odo:'' }
+  ],
+  syncUrl: '',
+  taxYearStart: '',
+  openingOdo: ''
+};
+
+let selectedVehicle = 0;
+let dupPendingClient = '';
+let dupExistingClient = '';
+let renameOldName = '';
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  loadData();
+  const today = new Date();
+  document.getElementById('tripDate').value = today.toISOString().split('T')[0];
+  document.getElementById('currentMonthDisplay') && (document.getElementById('currentMonthDisplay').textContent =
+    today.toLocaleString('en-CA', { month: 'long', year: 'numeric' }));
+  renderAll();
+  loadSettingsUI();
+  buildExportClientList();
+  setAppsScript();
+
+  if (settings.syncUrl) {
+    document.getElementById('syncBox').style.display = 'none';
+    document.getElementById('syncConnectedArea').style.display = 'block';
+    setSyncStatus('synced','synced');
+  }
+});
+
+// ══════════════════════════════════════════
+// PERSISTENCE
+// ══════════════════════════════════════════
+function loadData() {
+  try {
+    trips = JSON.parse(localStorage.getItem('tsd_v2_trips') || '[]');
+    clients = JSON.parse(localStorage.getItem('tsd_v2_clients') || '[]');
+    const s = localStorage.getItem('tsd_v2_settings');
+    if (s) settings = { ...settings, ...JSON.parse(s) };
+  } catch(e) { console.warn('Load error', e); }
+}
+
+function saveData() {
+  localStorage.setItem('tsd_v2_trips', JSON.stringify(trips));
+  localStorage.setItem('tsd_v2_clients', JSON.stringify(clients));
+  localStorage.setItem('tsd_v2_settings', JSON.stringify(settings));
+}
+
+function saveSettings() {
+  settings.vehicles[0] = {
+    year: v('v0year'), make: v('v0make'), model: v('v0model'),
+    plate: v('v0plate'), odo: v('v0odo')
+  };
+  settings.vehicles[1] = {
+    year: v('v1year'), make: v('v1make'), model: v('v1model'),
+    plate: v('v1plate'), odo: v('v1odo')
+  };
+  settings.taxYearStart = v('taxYearStart');
+  settings.openingOdo   = v('openingOdo');
+  saveData();
+  updateVehicleToggleLabels();
+}
+
+function v(id) { return document.getElementById(id)?.value || ''; }
+
+function loadSettingsUI() {
+  const veh = settings.vehicles;
+  ['year','make','model','plate','odo'].forEach(f => {
+    const el0 = document.getElementById('v0'+f);
+    const el1 = document.getElementById('v1'+f);
+    if (el0) el0.value = veh[0][f] || '';
+    if (el1) el1.value = veh[1][f] || '';
+  });
+  updateVehicleToggleLabels();
+  if (settings.syncUrl) {
+    document.getElementById('syncUrlInput').value = settings.syncUrl;
+  }
+  const tys = document.getElementById('taxYearStart');
+  const ood = document.getElementById('openingOdo');
+  if (tys) tys.value = settings.taxYearStart || '';
+  if (ood) ood.value = settings.openingOdo || '';
+}
+
+// ══════════════════════════════════════════
+// CRA CALCULATIONS
+// ══════════════════════════════════════════
+function calcYtdReimb() {
+  let r = 0, cum = 0;
+  const sorted = [...trips].sort((a,b) => new Date(a.date)-new Date(b.date));
+  sorted.forEach(t => {
+    if (cum >= CRA_THRESHOLD) r += t.km * CRA_RATE_2;
+    else {
+      const rem = CRA_THRESHOLD - cum;
+      r += t.km <= rem ? t.km * CRA_RATE_1 : rem * CRA_RATE_1 + (t.km - rem) * CRA_RATE_2;
+    }
+    cum += t.km;
+  });
+  return r;
+}
+
+function calcTripReimb(tripKm, cumKmBefore) {
+  if (cumKmBefore >= CRA_THRESHOLD) return tripKm * CRA_RATE_2;
+  const rem = CRA_THRESHOLD - cumKmBefore;
+  return tripKm <= rem ? tripKm * CRA_RATE_1 : rem * CRA_RATE_1 + (tripKm - rem) * CRA_RATE_2;
+}
+
+function getReimbForTrips(tripList) {
+  // Calculate reimbursement considering YTD position
+  const allSorted = [...trips].sort((a,b) => new Date(a.date)-new Date(b.date));
+  let cum = 0;
+  let total = 0;
+  allSorted.forEach(t => {
+    const r = calcTripReimb(t.km, cum);
+    if (tripList.find(x => x.id === t.id)) total += r;
+    cum += t.km;
+  });
+  return total;
+}
+
+// ══════════════════════════════════════════
+// RENDER ALL
+// ══════════════════════════════════════════
+function renderAll() {
+  renderStats();
+  renderTripLog();
+  renderClientManager();
+  updateExportPreview();
+}
+
+function renderStats() {
+  const ytdKm = trips.reduce((s,t) => s+t.km, 0);
+  const now = new Date();
+  const monthKm = trips
+    .filter(t => { const d = new Date(t.date+'T12:00:00'); return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear(); })
+    .reduce((s,t) => s+t.km, 0);
+  const ytdReimb = calcYtdReimb();
+
+  document.getElementById('statYtdKm').textContent = ytdKm.toFixed(1);
+  document.getElementById('statMonthKm').textContent = monthKm.toFixed(1);
+  document.getElementById('statYtdReimb').textContent = '$'+ytdReimb.toFixed(0);
+  document.getElementById('statTrips').textContent = trips.length;
+
+  const pct = Math.min(100, (ytdKm / CRA_THRESHOLD) * 100);
+  document.getElementById('thresholdFill').style.width = pct + '%';
+  document.getElementById('thresholdLabel').textContent = ytdKm.toFixed(0) + ' / 5,000 km';
+
+  // Change stat color if threshold crossed
+  const ytdEl = document.getElementById('statYtdKm');
+  if (ytdKm >= CRA_THRESHOLD) {
+    ytdEl.classList.remove('accent');
+    ytdEl.classList.add('warn');
+  } else {
+    ytdEl.classList.add('accent');
+    ytdEl.classList.remove('warn');
+  }
+}
+
+// ══════════════════════════════════════════
+// TRIP LOG RENDER
+// ══════════════════════════════════════════
+let activeFilter = 'all';
+
+function renderTripLog() {
+  renderFilterChips();
+  const filtered = getFilteredTrips();
+  const log = document.getElementById('tripLog');
+
+  if (!filtered.length) {
+    log.innerHTML = '<div class="empty-state">No trips match this filter.</div>';
+    return;
+  }
+
+  const sorted = [...filtered].sort((a,b) => new Date(b.date)-new Date(a.date));
+
+  // Cumulative for reimbursement display
+  const allSorted = [...trips].sort((a,b) => new Date(a.date)-new Date(b.date));
+  let cumMap = {};
+  let cum = 0;
+  allSorted.forEach(t => { cumMap[t.id] = cum; cum += t.km; });
+
+  log.innerHTML = sorted.map(t => {
+    const r = calcTripReimb(t.km, cumMap[t.id] || 0);
+    const d = new Date(t.date+'T12:00:00');
+    const dateStr = d.toLocaleDateString('en-CA', { weekday:'short', month:'short', day:'numeric' });
+    const vehDot = t.vehicle === 1
+      ? '<div class="trip-vehicle-dot secondary" title="Spouse\'s vehicle"></div>'
+      : '<div class="trip-vehicle-dot primary" title="Your vehicle"></div>';
+    const vehName = vehicleName(t.vehicle);
+    return `
+      <div class="trip-item">
+        ${vehDot}
+        <div>
+          <div class="trip-dest">${t.dest} <span style="font-size:0.72rem;color:var(--mid);font-weight:400">(${t.province})</span></div>
+          <div class="trip-meta">${t.purpose}${t.round ? ' · return' : ''} · ${vehName}</div>
+          ${t.client ? `<div class="trip-client">▸ ${t.client}</div>` : ''}
+          <div class="trip-date-small">${dateStr}</div>
+        </div>
+        <div class="trip-right">
+          <div class="trip-km">${t.km} km</div>
+          <div class="trip-reimb">~$${r.toFixed(2)}</div>
+          <button class="delete-btn" onclick="deleteTrip(${t.id})" title="Delete">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function vehicleName(idx) {
+  const v = settings.vehicles[idx || 0];
+  if (v && (v.make || v.model)) return [v.year, v.make, v.model].filter(Boolean).join(' ');
+  return idx === 1 ? "Spouse's Vehicle" : "My Vehicle";
+}
+
+function getFilteredTrips() {
+  if (activeFilter === 'all') return trips;
+  return trips.filter(t => t.client === activeFilter || (activeFilter==='noclient' && !t.client));
+}
+
+function renderFilterChips() {
+  const container = document.getElementById('tripFilters');
+  const usedClients = [...new Set(trips.map(t => t.client).filter(Boolean))];
+  const hasNoClient = trips.some(t => !t.client);
+
+  let html = `<button class="filter-chip ${activeFilter==='all'?'active':''}" onclick="setFilter('all',this)">All (${trips.length})</button>`;
+  usedClients.forEach(c => {
+    const count = trips.filter(t=>t.client===c).length;
+    html += `<button class="filter-chip ${activeFilter===c?'active':''}" onclick="setFilter('${c.replace(/'/g,"\\'")}',this)">${c} (${count})</button>`;
+  });
+  if (hasNoClient) html += `<button class="filter-chip ${activeFilter==='noclient'?'active':''}" onclick="setFilter('noclient',this)">No client</button>`;
+  container.innerHTML = html;
+}
+
+function setFilter(f, el) {
+  activeFilter = f;
+  renderTripLog();
+}
+
+// ══════════════════════════════════════════
+// ADD TRIP
+// ══════════════════════════════════════════
+function addTrip() {
+  const date = document.getElementById('tripDate').value;
+  let km = parseFloat(document.getElementById('tripKm').value);
+  const dest = document.getElementById('tripDest').value.trim();
+  const purpose = document.getElementById('tripPurpose').value.trim();
+  const province = document.getElementById('tripProvince').value;
+  const round = document.getElementById('tripRound').value === 'yes';
+  let client = document.getElementById('tripClient').value.trim();
+
+  if (!date || !km || isNaN(km) || !dest || !purpose) {
+    showToast('Please fill in date, KMs, destination and purpose', 'warn');
+    return;
+  }
+
+  if (round) km *= 2;
+
+  // Check for duplicate client
+  if (client) {
+    const similar = findSimilarClient(client);
+    if (similar && similar.toLowerCase() !== client.toLowerCase()) {
+      dupPendingClient = client;
+      dupExistingClient = similar;
+      document.getElementById('dupModalBody').innerHTML =
+        `You typed <strong>"${client}"</strong><br>Similar existing client: <strong>"${similar}"</strong><br><br>Use the existing name to keep your records clean?`;
+      document.getElementById('dupUseExistingBtn').textContent = `Use "${similar}"`;
+      document.getElementById('dupModal').classList.add('open');
+      return; // Wait for modal response
+    }
+    addClientIfNew(client);
+  }
+
+  finishAddTrip(date, km, dest, purpose, province, round, client);
+}
+
+function finishAddTrip(date, km, dest, purpose, province, round, client) {
+  const trip = { id: Date.now(), date, km, dest, purpose, province, round, client, vehicle: selectedVehicle };
+  trips.push(trip);
+  saveData();
+  renderAll();
+  buildExportClientList();
+
+  // Reset form
+  document.getElementById('tripKm').value = '';
+  document.getElementById('tripDest').value = '';
+  document.getElementById('tripPurpose').value = '';
+  document.getElementById('tripClient').value = '';
+  document.getElementById('tripDate').value = new Date().toISOString().split('T')[0];
+
+  showToast('Trip added ✓', 'success');
+
+  // Sync if connected
+  if (settings.syncUrl) syncToSheets([trip]);
+
+  // Threshold warning
+  const ytd = trips.reduce((s,t)=>s+t.km,0);
+  if (ytd >= CRA_THRESHOLD && ytd - km < CRA_THRESHOLD) {
+    setTimeout(() => showToast('⚠️ You\'ve crossed 5,000 km — rate now $0.62/km', 'warn'), 800);
+  }
+}
+
+function deleteTrip(id) {
+  trips = trips.filter(t => t.id !== id);
+  saveData();
+  renderAll();
+  showToast('Trip removed');
+}
+
+// ══════════════════════════════════════════
+// VEHICLE TOGGLE
+// ══════════════════════════════════════════
+function selectVehicle(idx) {
+  selectedVehicle = idx;
+  document.getElementById('vehBtn0').classList.toggle('active', idx===0);
+  document.getElementById('vehBtn1').classList.toggle('active', idx===1);
+}
+
+function updateVehicleToggleLabels() {
+  const v0 = settings.vehicles[0];
+  const v1 = settings.vehicles[1];
+  document.getElementById('vehToggleLabel0').textContent = v0.make ? `${v0.year} ${v0.make}`.trim() : 'My Vehicle';
+  document.getElementById('vehToggleSub0').textContent = v0.model || 'Primary';
+  document.getElementById('vehToggleLabel1').textContent = v1.make ? `${v1.year} ${v1.make}`.trim() : "Spouse's";
+  document.getElementById('vehToggleSub1').textContent = v1.model || 'Secondary';
+}
+
+// ══════════════════════════════════════════
+// CLIENT AUTOCOMPLETE
+// ══════════════════════════════════════════
+function clientAutocomplete(val) {
+  const dropdown = document.getElementById('clientDropdown');
+  if (!val || val.length < 1) { dropdown.classList.remove('open'); return; }
+
+  const lower = val.toLowerCase();
+  const exact = clients.filter(c => c.toLowerCase().includes(lower));
+  const similar = clients.filter(c => !exact.includes(c) && similarity(c, val) > 0.5);
+  const combined = [...exact, ...similar].slice(0, 8);
+
+  if (!combined.length) { dropdown.classList.remove('open'); return; }
+
+  dropdown.innerHTML = combined.map(c => {
+    const isSimilar = !exact.includes(c);
+    return `<div class="autocomplete-item" onmousedown="selectClient('${c.replace(/'/g,"\\'")}')">
+      <span class="match">${c}</span>${isSimilar ? '<span class="similar-tag">similar</span>' : ''}
+    </div>`;
+  }).join('');
+
+  dropdown.classList.add('open');
+}
+
+function selectClient(name) {
+  document.getElementById('tripClient').value = name;
+  document.getElementById('clientDropdown').classList.remove('open');
+}
+
+function hideAutocompleteDelayed() {
+  setTimeout(() => document.getElementById('clientDropdown').classList.remove('open'), 200);
+}
+
+function addClientIfNew(name) {
+  if (!clients.includes(name)) {
+    clients.push(name);
+    clients.sort();
+    saveData();
+    renderClientManager();
+    buildExportClientList();
+  }
+}
+
+function findSimilarClient(name) {
+  let best = null, bestScore = 0;
+  clients.forEach(c => {
+    if (c.toLowerCase() === name.toLowerCase()) return;
+    const s = similarity(c, name);
+    if (s > 0.65 && s > bestScore) { best = c; bestScore = s; }
+  });
+  return best;
+}
+
+// Simple string similarity (Dice coefficient)
+function similarity(a, b) {
+  a = a.toLowerCase(); b = b.toLowerCase();
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  const bigrams = s => { const m = new Map(); for (let i=0;i<s.length-1;i++){const bg=s.slice(i,i+2);m.set(bg,(m.get(bg)||0)+1);} return m; };
+  const aM = bigrams(a), bM = bigrams(b);
+  let intersect = 0;
+  aM.forEach((v,k) => { if (bM.has(k)) intersect += Math.min(v, bM.get(k)); });
+  return (2 * intersect) / (a.length + b.length - 2);
+}
+
+// ══════════════════════════════════════════
+// DUPLICATE MODAL
+// ══════════════════════════════════════════
+function closeDupModal(useExisting) {
+  document.getElementById('dupModal').classList.remove('open');
+  const client = useExisting ? dupExistingClient : dupPendingClient;
+  addClientIfNew(client);
+
+  const date = document.getElementById('tripDate').value;
+  let km = parseFloat(document.getElementById('tripKm').value);
+  const dest = document.getElementById('tripDest').value.trim();
+  const purpose = document.getElementById('tripPurpose').value.trim();
+  const province = document.getElementById('tripProvince').value;
+  const round = document.getElementById('tripRound').value === 'yes';
+  if (round) km *= 2;
+
+  finishAddTrip(date, km, dest, purpose, province, false, client); // km already doubled if needed
+}
+
+// ══════════════════════════════════════════
+// CLIENT MANAGER
+// ══════════════════════════════════════════
+function renderClientManager() {
+  const el = document.getElementById('clientList');
+  if (!clients.length) {
+    el.innerHTML = '<div class="empty-state">No clients yet. They appear automatically when you log trips.</div>';
+    return;
+  }
+
+  el.innerHTML = clients.map(c => {
+    const count = trips.filter(t=>t.client===c).length;
+    return `<div class="client-item">
+      <div>
+        <div class="client-name-display">${c}</div>
+        <div class="client-trip-count">${count} trip${count!==1?'s':''}</div>
+      </div>
+      <div class="client-actions">
+        <button class="btn-tiny" onclick="startRename('${c.replace(/'/g,"\\'")}')">Rename</button>
+        <button class="btn-tiny danger" onclick="mergeClient('${c.replace(/'/g,"\\'")}')">Merge</button>
+        <button class="btn-tiny danger" onclick="deleteClient('${c.replace(/'/g,"\\'")}')">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function startRename(name) {
+  renameOldName = name;
+  document.getElementById('renameInput').value = name;
+  document.getElementById('renameModal').classList.add('open');
+  setTimeout(() => document.getElementById('renameInput').select(), 100);
+}
+
+function closeRenameModal(doIt) {
+  document.getElementById('renameModal').classList.remove('open');
+  if (!doIt) return;
+  const newName = document.getElementById('renameInput').value.trim();
+  if (!newName || newName === renameOldName) return;
+
+  trips.forEach(t => { if (t.client === renameOldName) t.client = newName; });
+  const idx = clients.indexOf(renameOldName);
+  if (idx >= 0) clients[idx] = newName;
+  clients.sort();
+  saveData();
+  renderAll();
+  buildExportClientList();
+  showToast(`Renamed to "${newName}"`, 'success');
+}
+
+function mergeClient(name) {
+  const target = prompt(`Merge "${name}" into which existing client?\n\nExisting clients:\n${clients.filter(c=>c!==name).join('\n')}`);
+  if (!target || !clients.includes(target)) { showToast('Client not found'); return; }
+  trips.forEach(t => { if (t.client === name) t.client = target; });
+  clients = clients.filter(c => c !== name);
+  saveData();
+  renderAll();
+  buildExportClientList();
+  showToast(`Merged into "${target}"`, 'success');
+}
+
+function deleteClient(name) {
+  if (!confirm(`Remove "${name}" from client list? Existing trips will keep the name but it won't appear in autocomplete.`)) return;
+  clients = clients.filter(c => c !== name);
+  saveData();
+  renderClientManager();
+  buildExportClientList();
+  showToast('Client removed');
+}
+
+// ══════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════
+function buildExportClientList() {
+  const sel = document.getElementById('exportClient');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All Clients</option>' +
+    clients.map(c => `<option value="${c}">${c}</option>`).join('');
+  if (current) sel.value = current;
+}
+
+function applyQuickFilter() {
+  const val = document.getElementById('exportQuick').value;
+  const now = new Date();
+  const y = now.getFullYear();
+  let start, end;
+
+  if (val === 'thismonth') {
+    start = new Date(y, now.getMonth(), 1);
+    end = new Date(y, now.getMonth()+1, 0);
+  } else if (val === 'lastmonth') {
+    start = new Date(y, now.getMonth()-1, 1);
+    end = new Date(y, now.getMonth(), 0);
+  } else if (val === 'q1') { start = new Date(y,0,1); end = new Date(y,2,31); }
+  else if (val === 'q2') { start = new Date(y,3,1); end = new Date(y,5,30); }
+  else if (val === 'q3') { start = new Date(y,6,1); end = new Date(y,8,30); }
+  else if (val === 'q4') { start = new Date(y,9,1); end = new Date(y,11,31); }
+  else if (val === 'ytd') { start = new Date(y,0,1); end = now; }
+  else if (val === 'fullyear') { start = new Date(y,0,1); end = new Date(y,11,31); }
+  else return;
+
+  document.getElementById('exportStart').value = start.toISOString().split('T')[0];
+  document.getElementById('exportEnd').value = end.toISOString().split('T')[0];
+  updateExportPreview();
+}
+
+function getExportTrips() {
+  const startVal = document.getElementById('exportStart')?.value;
+  const endVal = document.getElementById('exportEnd')?.value;
+  const clientVal = document.getElementById('exportClient')?.value;
+  const vehVal = document.getElementById('exportVehicle')?.value;
+
+  let filtered = [...trips];
+  if (startVal) filtered = filtered.filter(t => t.date >= startVal);
+  if (endVal) filtered = filtered.filter(t => t.date <= endVal);
+  if (clientVal) filtered = filtered.filter(t => t.client === clientVal);
+  if (vehVal !== '') filtered = filtered.filter(t => String(t.vehicle||0) === vehVal);
+  return filtered.sort((a,b) => new Date(a.date)-new Date(b.date));
+}
+
+function updateExportPreview() {
+  const filtered = getExportTrips();
+  const el = document.getElementById('exportPreview');
+  if (!el) return;
+
+  if (!filtered.length) {
+    el.innerHTML = '<span style="color:var(--mid)">No trips match the selected filters.</span>';
+    return;
+  }
+
+  const totalKm = filtered.reduce((s,t)=>s+t.km,0);
+  const reimb = getReimbForTrips(filtered);
+  const clientList = [...new Set(filtered.map(t=>t.client).filter(Boolean))];
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+      <div><div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mid);margin-bottom:2px">Trips</div><div style="font-weight:700;font-size:1.1rem">${filtered.length}</div></div>
+      <div><div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mid);margin-bottom:2px">Total KMs</div><div style="font-weight:700;font-size:1.1rem">${totalKm.toFixed(1)}</div></div>
+      <div><div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mid);margin-bottom:2px">Est. Reimb.</div><div style="font-weight:700;font-size:1.1rem;color:var(--green)">$${reimb.toFixed(2)}</div></div>
+    </div>
+    ${clientList.length ? `<div style="font-size:0.75rem;color:var(--mid)">Clients: ${clientList.join(', ')}</div>` : ''}
+  `;
+}
+
+['exportStart','exportEnd','exportClient','exportVehicle'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', updateExportPreview);
+});
+
+function doExport(type) {
+  const filtered = getExportTrips();
+  if (!filtered.length) { showToast('No trips to export', 'warn'); return; }
+
+  const startVal = document.getElementById('exportStart').value;
+  const endVal = document.getElementById('exportEnd').value;
+  const label = startVal && endVal
+    ? `${startVal} to ${endVal}`
+    : `${TAX_YEAR} YTD`;
+
+  if (type === 'xlsx') exportExcel(filtered, label);
+  else exportPDF(filtered, label);
+}
+
+function exportExcel(filtered, label) {
+  const wb = XLSX.utils.book_new();
+  const totalKm = filtered.reduce((s,t)=>s+t.km,0);
+  const reimb = getReimbForTrips(filtered);
+  const v0 = settings.vehicles[0];
+  const v1 = settings.vehicles[1];
+  const vehStr0 = [v0.year,v0.make,v0.model].filter(Boolean).join(' ') || 'Primary Vehicle';
+  const vehStr1 = [v1.year,v1.make,v1.model].filter(Boolean).join(' ') || 'Secondary Vehicle';
+
+  const header = [
+    ['TSD Advisory Inc. — Business Mileage Log'],
+    [`Period: ${label}`],
+    [`CRA Rate: $${CRA_RATE_1}/km (first ${CRA_THRESHOLD} km) · $${CRA_RATE_2}/km thereafter`],
+    [`Primary Vehicle: ${vehStr0}${v0.plate ? ' · Plate: '+v0.plate : ''}`],
+    [`Secondary Vehicle: ${vehStr1}${v1.plate ? ' · Plate: '+v1.plate : ''}`],
+    [],
+    ['Date','Destination','Province','Client','Business Purpose','Vehicle','KM','Round Trip','Reimb. (est.)']
+  ];
+
+  const rows = filtered.map(t => {
+    const allSorted = [...trips].sort((a,b)=>new Date(a.date)-new Date(b.date));
+    let cum = 0;
+    allSorted.forEach(x => { if (x.id===t.id) return; if (new Date(x.date)<new Date(t.date)) cum+=x.km; });
+    const r = calcTripReimb(t.km, cum);
+    return [
+      new Date(t.date+'T12:00:00').toLocaleDateString('en-CA'),
+      t.dest, t.province, t.client||'', t.purpose,
+      t.vehicle===1 ? vehStr1 : vehStr0,
+      t.km, t.round?'Yes':'No', parseFloat(r.toFixed(2))
+    ];
+  });
+
+  const footer = [
+    [],
+    ['','','','','','TOTAL', totalKm.toFixed(1),'', parseFloat(reimb.toFixed(2))],
+    [],
+    [`Generated: ${new Date().toLocaleDateString('en-CA')}`, '','','','','','','','Confirm amounts with accountant']
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([...header,...rows,...footer]);
+  ws['!cols'] = [{wch:12},{wch:30},{wch:10},{wch:20},{wch:35},{wch:18},{wch:8},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Mileage Log');
+
+  // Second sheet: by vehicle
+  if (filtered.some(t=>t.vehicle===1)) {
+    const byVeh = (idx) => {
+      const vtrips = filtered.filter(t=>(t.vehicle||0)===idx);
+      if (!vtrips.length) return;
+      const vName = idx===0?vehStr0:vehStr1;
+      const vRows = [
+        [`Vehicle: ${vName}`],[],
+        ['Date','Destination','Client','Business Purpose','KM','Reimb. (est.)'],
+        ...vtrips.map(t=>{
+          let cum=0;
+          trips.sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(x=>{if(new Date(x.date)<new Date(t.date))cum+=x.km;});
+          const r = calcTripReimb(t.km,cum);
+          return [new Date(t.date+'T12:00:00').toLocaleDateString('en-CA'),t.dest,t.client||'',t.purpose,t.km,parseFloat(r.toFixed(2))];
+        }),
+        [],
+        ['','','','TOTAL', vtrips.reduce((s,t)=>s+t.km,0).toFixed(1), parseFloat(getReimbForTrips(vtrips).toFixed(2))]
+      ];
+      const ws2 = XLSX.utils.aoa_to_sheet(vRows);
+      ws2['!cols'] = [{wch:12},{wch:30},{wch:20},{wch:35},{wch:8},{wch:14}];
+      XLSX.utils.book_append_sheet(wb, ws2, `Vehicle ${idx+1}`);
+    };
+    byVeh(0); byVeh(1);
+  }
+
+  XLSX.writeFile(wb, `TSD_Mileage_${label.replace(/\s/g,'_').replace(/\//g,'-')}.xlsx`);
+  showToast('Excel downloaded ✓', 'success');
+}
+
+function exportPDF(filtered, label) {
+  const totalKm   = filtered.reduce((s,t) => s+t.km, 0);
+  const reimb     = getReimbForTrips(filtered);
+  const v0        = settings.vehicles[0];
+  const vehStr0   = [v0.year, v0.make, v0.model].filter(Boolean).join(' ') || 'Primary Vehicle';
+  const plateTxt  = v0.plate ? ` (${v0.plate})` : '';
+
+  // ── YTD from tax year start ──────────────────────────────────────────────
+  const dayOne    = settings.taxYearStart ? new Date(settings.taxYearStart + 'T00:00:00') : null;
+  const openOdo   = parseFloat(settings.openingOdo) || null;
+
+  const allSorted = [...trips].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  // All trips from Day 1 up to and including the last day of the filtered period
+  const filteredDates = filtered.map(t => new Date(t.date + 'T12:00:00'));
+  const periodEnd = filteredDates.length ? new Date(Math.max(...filteredDates)) : new Date();
+
+  const ytdTrips = dayOne
+    ? allSorted.filter(t => {
+        const d = new Date(t.date + 'T12:00:00');
+        return d >= dayOne && d <= periodEnd;
+      })
+    : allSorted.filter(t => new Date(t.date + 'T12:00:00') <= periodEnd);
+
+  const ytdKm    = ytdTrips.reduce((s,t) => s+t.km, 0);
+  const ytdReimb = getReimbForTrips(ytdTrips);
+
+  // CRA tier breakdown for YTD
+  const tier1Used = Math.min(ytdKm, CRA_THRESHOLD);
+  const tier2Used = Math.max(0, ytdKm - CRA_THRESHOLD);
+  const rateNote  = tier2Used > 0
+    ? `First ${CRA_THRESHOLD} km @ $${CRA_RATE_1}/km, remaining ${tier2Used.toFixed(0)} km @ $${CRA_RATE_2}/km`
+    : `All ${ytdKm.toFixed(0)} km @ $${CRA_RATE_1}/km (within first ${CRA_THRESHOLD} km threshold)`;
+
+  const dayOneLabel = dayOne
+    ? dayOne.toLocaleDateString('en-CA', {year:'numeric', month:'long', day:'numeric'})
+    : 'Tax Year Start';
+
+  const openOdoLine = openOdo
+    ? `Opening odometer (${dayOneLabel}): <strong>${openOdo.toLocaleString()} km</strong>`
+    : '';
+
+  // ── Trip rows ────────────────────────────────────────────────────────────
+  let cumKm = dayOne
+    ? allSorted.filter(t => new Date(t.date+'T12:00:00') < dayOne).reduce((s,t)=>s+t.km,0)
+    : 0;
+
+  const rows = filtered.map(t => {
+    const r    = calcTripReimb(t.km, cumKm);
+    cumKm     += t.km;
+    const dStr = new Date(t.date+'T12:00:00').toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});
+    const rt   = t.round ? ' (return)' : '';
+    return `<tr>
+      <td>${dStr}</td>
+      <td>${t.dest}${rt} — ${t.province}</td>
+      <td>${t.client||'—'}</td>
+      <td>${t.purpose}</td>
+      <td style="text-align:center">${t.km}</td>
+      <td style="text-align:right">$${r.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const genDate = new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'});
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'IBM Plex Sans',Arial,sans-serif;font-size:10px;color:#0f1923;padding:36px 44px;max-width:960px;margin:0 auto}
+    .header{border-bottom:3px solid #b5341a;padding-bottom:14px;margin-bottom:18px}
+    .header-top{display:flex;justify-content:space-between;align-items:flex-start}
+    .corp-name{font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#0f1923}
+    .invoice-label{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:#b5341a;font-weight:600;margin-bottom:3px}
+    .invoice-num{font-size:13px;font-weight:600}
+    .addr-block{margin-top:10px;display:flex;gap:60px}
+    .addr-col label{font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:#7a8494;display:block;margin-bottom:3px}
+    .addr-col p{font-size:10px;line-height:1.6}
+    .period-bar{background:#f4f1ec;border:1px solid #ddd9d0;border-radius:4px;padding:8px 14px;margin:14px 0;font-size:9.5px;display:flex;gap:30px;align-items:center}
+    .period-bar strong{font-size:11px}
+    .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+    .s-block{background:#0f1923;color:white;padding:10px 14px;border-radius:5px}
+    .s-block.green{background:#1a6b3c}
+    .s-block.grey{background:#3d4f61}
+    .s-block .sl{font-size:7.5px;text-transform:uppercase;letter-spacing:.09em;opacity:.65;margin-bottom:3px}
+    .s-block .sv{font-size:15px;font-weight:700}
+    .s-block .sd{font-size:8px;opacity:.7;margin-top:2px}
+    .ytd-box{border:1px solid #ddd9d0;border-radius:4px;padding:10px 14px;margin:14px 0;background:#fafaf8}
+    .ytd-box h4{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#7a8494;margin-bottom:8px}
+    .ytd-row{display:flex;justify-content:space-between;font-size:9.5px;padding:3px 0;border-bottom:1px solid #eee}
+    .ytd-row:last-child{border-bottom:none;font-weight:600;padding-top:6px}
+    .rate-note{font-size:8.5px;color:#7a8494;margin-top:6px;font-style:italic}
+    .odo-note{font-size:8.5px;color:#7a8494;margin-top:4px}
+    table{width:100%;border-collapse:collapse;margin-top:14px}
+    th{background:#0f1923;color:white;padding:7px 9px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.07em}
+    td{padding:5px 9px;border-bottom:1px solid #ededea;vertical-align:top;font-size:9.5px}
+    tr:nth-child(even) td{background:#f9f9f7}
+    .total-row td{font-weight:700;background:#f4f1ec!important;border-top:2px solid #0f1923;font-size:10px}
+    .transfer-box{margin-top:18px;border:1.5px solid #1a6b3c;border-radius:5px;padding:12px 16px;background:#f0f9f4}
+    .transfer-box h4{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#1a6b3c;margin-bottom:6px}
+    .transfer-box .amount{font-size:18px;font-weight:700;color:#1a6b3c}
+    .transfer-box p{font-size:9px;color:#3a5a3a;margin-top:4px}
+    .sig-line{margin-top:28px;display:flex;gap:60px}
+    .sig-col{flex:1}
+    .sig-col label{font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:#7a8494;display:block;margin-bottom:20px}
+    .sig-col .line{border-bottom:1px solid #0f1923;height:1px;margin-bottom:4px}
+    .sig-col p{font-size:9px;color:#7a8494}
+    .footer{margin-top:20px;font-size:8px;color:#9ca3af;border-top:1px solid #e8e4dc;padding-top:10px;display:flex;justify-content:space-between}
+    @media print{body{padding:20px 28px}}
+  </style></head><body>
+
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="corp-name">TSD Asset Management Inc.</div>
+        <div style="font-size:9px;color:#7a8494;margin-top:2px">Vehicle Mileage Reimbursement Invoice</div>
+      </div>
+      <div style="text-align:right">
+        <div class="invoice-label">Invoice</div>
+        <div class="invoice-num">MILEAGE-${new Date().toISOString().slice(0,7).replace('-','')}</div>
+        <div style="font-size:8.5px;color:#7a8494;margin-top:3px">Issued: ${genDate}</div>
+      </div>
+    </div>
+    <div class="addr-block">
+      <div class="addr-col">
+        <label>Billed To</label>
+        <p><strong>TSD Asset Management Inc.</strong><br>Ontario, Canada</p>
+      </div>
+      <div class="addr-col">
+        <label>Submitted By</label>
+        <p><strong>David Tanel</strong><br>Principal</p>
+      </div>
+      <div class="addr-col">
+        <label>Vehicle</label>
+        <p><strong>${vehStr0}</strong>${plateTxt}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="period-bar">
+    <span>Period: <strong>${label}</strong></span>
+    <span>CRA Tax Year: <strong>${dayOneLabel}</strong> onward</span>
+    <span>CRA Rate: <strong>$${CRA_RATE_1}/km</strong> (first ${CRA_THRESHOLD} km) &nbsp;·&nbsp; <strong>$${CRA_RATE_2}/km</strong> thereafter</span>
+  </div>
+
+  <div class="summary-grid">
+    <div class="s-block"><div class="sl">This Period — KMs</div><div class="sv">${totalKm.toFixed(0)}</div><div class="sd">${filtered.length} trips</div></div>
+    <div class="s-block green"><div class="sl">This Period — Amount</div><div class="sv">$${reimb.toFixed(2)}</div><div class="sd">Reimbursable</div></div>
+    <div class="s-block grey"><div class="sl">YTD KMs (from Day 1)</div><div class="sv">${ytdKm.toFixed(0)}</div><div class="sd">Cumulative</div></div>
+    <div class="s-block grey"><div class="sl">YTD Reimbursed</div><div class="sv">$${ytdReimb.toFixed(2)}</div><div class="sd">All periods</div></div>
+  </div>
+
+  <div class="ytd-box">
+    <h4>CRA Rate Tier Tracking — Year to Date (from ${dayOneLabel})</h4>
+    <div class="ytd-row"><span>Km logged in Tier 1 (@ $${CRA_RATE_1}/km)</span><span>${tier1Used.toFixed(0)} km</span></div>
+    <div class="ytd-row"><span>Km logged in Tier 2 (@ $${CRA_RATE_2}/km)</span><span>${tier2Used > 0 ? tier2Used.toFixed(0)+' km' : '—'}</span></div>
+    <div class="ytd-row"><span>Remaining Tier 1 room</span><span>${Math.max(0, CRA_THRESHOLD - ytdKm).toFixed(0)} km</span></div>
+    <div class="ytd-row"><span>Total YTD km logged</span><span>${ytdKm.toFixed(0)} km</span></div>
+    <div class="rate-note">${rateNote}</div>
+    ${openOdoLine ? `<div class="odo-note">${openOdoLine}</div>` : ''}
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>Date</th><th>Destination</th><th>Client</th><th>Business Purpose</th>
+      <th style="text-align:center">KM</th><th style="text-align:right">Amount</th>
+    </tr></thead>
+    <tbody>
+      ${rows}
+      <tr class="total-row">
+        <td colspan="4">TOTAL — ${label}</td>
+        <td style="text-align:center">${totalKm.toFixed(0)}</td>
+        <td style="text-align:right">$${reimb.toFixed(2)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="transfer-box">
+    <h4>Reimbursement Transfer</h4>
+    <div class="amount">$${reimb.toFixed(2)}</div>
+    <p>Transfer from TSD Asset Management Inc. business account to David Tanel personal account.<br>
+    This amount represents tax-free reimbursement of business vehicle expenses under CRA automobile allowance rules (IT-522R / s. 6(1)(b)(x) ITA).</p>
+  </div>
+
+  <div class="sig-line">
+    <div class="sig-col">
+      <label>Authorized by</label>
+      <div class="line"></div>
+      <p>David Tanel — Principal, TSD Asset Management Inc.</p>
+    </div>
+    <div class="sig-col">
+      <label>Date</label>
+      <div class="line"></div>
+      <p>${genDate}</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>CRA ${TAX_YEAR} rates: $${CRA_RATE_1}/km (first ${CRA_THRESHOLD} km) · $${CRA_RATE_2}/km thereafter · Per IT-522R automobile allowance rules</span>
+    <span>Confirm with your accountant before filing</span>
+  </div>
+
+  </body></html>`;
+
+  const w = window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(), 700);
+  showToast('Invoice ready — Print → Save as PDF', 'success');
+}
+
+// ══════════════════════════════════════════
+// GOOGLE SHEETS SYNC
+// ══════════════════════════════════════════
+function connectSync() {
+  const url = document.getElementById('syncUrlInput').value.trim();
+  if (!url || !url.includes('script.google.com')) {
+    showToast('Please enter a valid Apps Script URL', 'warn'); return;
+  }
+  settings.syncUrl = url;
+  saveData();
+  setSyncStatus('syncing','connecting…');
+
+  // Use no-cors mode — Google Apps Script blocks CORS from local files.
+  // We send the request and assume success if it doesn't throw a network error.
+  // The script will still receive and process the data correctly.
+  fetch(url + '?action=ping', { mode: 'no-cors' })
+    .then(() => {
+      document.getElementById('syncBox').style.display = 'none';
+      document.getElementById('syncConnectedArea').style.display = 'block';
+      setSyncStatus('synced','synced');
+      showToast('Connected to Google Sheets ✓', 'success');
+      if (trips.length) syncToSheets(trips, true);
+    })
+    .catch(() => {
+      setSyncStatus('error','error');
+      showToast('Network error — check your internet connection', 'warn');
+    });
+}
+
+function disconnectSync() {
+  if (!confirm('Disconnect Google Sheets sync? Your local data is kept.')) return;
+  settings.syncUrl = '';
+  saveData();
+  document.getElementById('syncBox').style.display = 'block';
+  document.getElementById('syncConnectedArea').style.display = 'none';
+  setSyncStatus('','local');
+}
+
+function syncToSheets(newTrips, bulk = false) {
+  if (!settings.syncUrl) return;
+  setSyncStatus('syncing','syncing…');
+
+  // POST bodies get stripped in no-cors mode — use GET with encoded params instead
+  const payload = encodeURIComponent(JSON.stringify({
+    action: bulk ? 'bulkWrite' : 'appendTrips',
+    trips: newTrips
+  }));
+
+  fetch(`${settings.syncUrl}?data=${payload}`, { mode: 'no-cors' })
+    .then(() => setSyncStatus('synced', 'synced'))
+    .catch(() => setSyncStatus('error', 'sync error'));
+}
+
+function setSyncStatus(state, label) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot' + (state ? ' '+state : '');
+  if (lbl) lbl.textContent = label;
+}
+
+// ══════════════════════════════════════════
+// APPS SCRIPT
+// ══════════════════════════════════════════
+function setAppsScript() {
+  const script = `// TSD Mileage Tracker — Google Apps Script v3
+// Paste into Extensions > Apps Script from inside your Google Sheet
+// Deploy > Web App > Execute as Me > Anyone
+
+function doGet(e) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('Trips');
+
+    // Handle ping (no data param)
+    if (!e.parameter.data) {
+      return ContentService.createTextOutput(JSON.stringify({status:'ok'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (!sheet) {
+      sheet = ss.insertSheet('Trips');
+      const headers = ['ID','Date','Destination','Province','Client',
+                       'Purpose','KM','Round Trip','Vehicle','Synced'];
+      sheet.appendRow(headers);
+      sheet.getRange(1,1,1,headers.length)
+           .setFontWeight('bold')
+           .setBackground('#0f1923')
+           .setFontColor('#ffffff');
+      sheet.setFrozenRows(1);
+    }
+
+    const data = JSON.parse(decodeURIComponent(e.parameter.data));
+    const trips = data.trips || [];
+
+    if (data.action === 'bulkWrite') {
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) sheet.deleteRows(2, lastRow - 1);
+    }
+
+    trips.forEach(function(t) {
+      sheet.appendRow([
+        t.id, t.date, t.dest, t.province, t.client || '',
+        t.purpose, t.km, t.round ? 'Yes' : 'No',
+        t.vehicle === 1 ? 'Secondary' : 'Primary',
+        new Date().toLocaleDateString('en-CA')
+      ]);
+    });
+
+    return ContentService
+      .createTextOutput(JSON.stringify({status:'ok', added: trips.length}))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({status:'error', message: err.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+  const el = document.getElementById('appsScriptCode');
+  if (el) el.textContent = script;
+}
+
+function copyScript() {
+  const text = document.getElementById('appsScriptCode').textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('Script copied ✓', 'success'));
+}
+
+// ══════════════════════════════════════════
+// BACKUP & CLEAR
+// ══════════════════════════════════════════
+function exportBackup() {
+  const data = { trips, clients, settings, exported: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `TSD_Backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  showToast('Backup downloaded ✓', 'success');
+}
+
+function confirmClear() { document.getElementById('clearModal').classList.add('open'); }
+
+function doClear() {
+  document.getElementById('clearModal').classList.remove('open');
+  trips = []; clients = [];
+  saveData();
+  renderAll();
+  buildExportClientList();
+  showToast('All data cleared');
+}
+
+// ══════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'export') updateExportPreview();
+  if (name === 'trips') renderTripLog();
+  if (name === 'settings') { renderClientManager(); loadSettingsUI(); }
+}
+
+// ══════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' '+type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
